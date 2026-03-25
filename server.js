@@ -10,18 +10,40 @@ const path = require("path");
 
 const sqlite3 = require("sqlite3").verbose();
 
-const db = new sqlite3.Database("./users.db");
+const db = new sqlite3.Database("./fafo.db");
 
 const bcrypt = require('bcrypt');
+
+const session = require('express-session');
+
+app.use(session({
+    secret: 'min_hemmelige_kode', // Bytt denne til noe unikt
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false } // Sett til true hvis du bruker HTTPS
+}));
+
+
+// Middleware: krever innlogging
+function sjekkInnlogging(req, res, next) {
+    if (req.session && req.session.userid) {
+        // Brukeren er logget inn! Gå videre til neste steg.
+        return next();
+    } else {
+        // Brukeren er IKKE logget inn. Send dem til login-siden.
+        res.redirect('/login');
+    }
+}
 
 // Create table
 db.run(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL UNIQUE,
+    username TEXT NOT NULL UNIQUE CHECK(length(username) >= 3),
     email TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    password TEXT NOT NULL CHECK(length(password) >= 6),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    pfp BLOB DEFAULT '/public/placeholder.png'
   )
 `);
 
@@ -31,12 +53,12 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 // Handle form submit
 app.post("/register", async (req, res) => {
-  const { username, email, password } = req.body; // ✅ THIS LINE IS REQUIRED
+  const { username, email, password } = req.body;
 
   if (!username || !email || !password) {
     return res.send("All fields required");
+  }
 
-}
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -45,24 +67,21 @@ app.post("/register", async (req, res) => {
       [username, email, hashedPassword],
       function (err) {
         if (err) {
-          console.error(err);
-          return res.send("Error creating user");
+          if (err.message.includes("UNIQUE")) {
+            return res.send("Brukernavn eller e-post eksisterer allerede");
+          }
+          return res.send("Feil ved opprettelse av bruker");
         }
-
-        res.send("User created successfully!");
+        // Etter suksess, send dem til login-siden
+        res.redirect('/login');
       }
     );
-    res.redirect('/login');
   } catch (err) {
-
     console.error(err);
-    if (err.message.includes("UNIQUE")) {
-  return res.send("Username or email already exists");
-  res.send("Server error");
-}
-
+    res.status(500).send("Server error");
   }
 });
+
 app.post('/login', (req, res) => {
     const { identifier, password } = req.body; // 'identifier' can be email or username
 
@@ -93,22 +112,56 @@ app.post('/login', (req, res) => {
     });
 });
 
+// app.post('/login', (req, res) => {
+//     const { identifier, password } = req.body;
+//     const sql = `SELECT * FROM users WHERE username = ? OR email = ?`;
+
+//     db.get(sql, [identifier, identifier], async (err, user) => {
+//         if (err) return res.status(500).send("Databasefeil");
+//         if (!user) return res.send("Ugyldig brukernavn eller e-post");
+
+//         try {
+//             const isMatch = await bcrypt.compare(password, user.password);
+//             if (isMatch) {
+//                 // --- HER SKJER INNLOGGINGEN ---
+//                 req.session.userid = user.id; // Lagre ID i session
+//                 res.redirect('/'); // Send dem til forsiden!
+//             } else {
+//                 res.send("Feil passord");
+//             }
+//         } catch (error) {
+//             res.status(500).send("Feil ved sammenligning av passord");
+//         }
+//     });
+// });
 app.use(express.static(path.join(__dirname, 'public')));
 // index page
-app.get('/', function(req, res) {
-    const mascots = [
-    { name: 'Sammy', organization: "DigitalOcean", birth_year: 2012},
-    { name: 'Tux', organization: "Linux", birth_year: 1996},
-    { name: 'Moby Dock', organization: "Docker", birth_year: 2013}
-  ];
-  const tagline = "No programming concept is complete without a cute animal mascot.";
 
 
-  res.render('pages/index', {
-    mascots: mascots,
-    tagline: String(req.query.tagline || '')
-  });
-});
+
+app.get('/', sjekkInnlogging, function(req, res) {
+    // 1. Call the database directly
+    // The third argument is the "callback" function (err, rows)
+    db.all('SELECT id, username, pfp, created_at FROM users ORDER BY created_at DESC', [], (err, rows) => {
+        
+        // 2. Check for errors first
+        if (err) {
+            console.error(err.message);
+            return res.status(500).send("Database error");
+        }
+
+        const tagline = "No programming concept is complete without a cute animal mascot.";
+
+        // 4. Render the page INSIDE the callback
+        // We use 'rows' (the result from the DB) as our 'fafo' data
+        res.render('pages/index', {
+          user: req.userid,
+          fafo: rows,
+          title: 'User List',
+          tagline: tagline
+        });
+    });
+ });
 
 // about page
 app.get('/about', function(req, res) {
@@ -127,5 +180,9 @@ app.get('/register', function(req, res) {
   res.render('pages/register', {
     tagline: String(req.query.tagline || '')
   });
+});
+app.get('/logout', (req, res) => {
+    req.session.destroy(); // Sletter session-dataen
+    res.redirect('/login');
 });
 app.listen(8080, () => console.log('Server is listening on port 8080'));

@@ -10,23 +10,32 @@
 </header>
 
 <main>
-  <div class="p-5 mb-4 bg-light rounded-3">
-    <h1>This is great</h1>
-    <p>Welcome to templating using EJS</p>
-    <h2>Variable</h2>
-    <p><%= tagline %></p>
+  <div class="box">
+      <h1>This is great</h1>
+      <p>Welcome to templating using EJS</p>
+      <h2>Variable</h2>
+      <p><%= tagline %></p>
+      </div>
+    <article class="topUsers">
+      <h2>reg users</h2>
+  
+        <ul>
+          <% if (fafo.length === 0) { %>
+            <li>No users found yet!</li>
+          <% } else { %>
+            <% for (let user of fafo) { %>
+              <li class="user-card">
+                <img src="<%= user.pfp %>" alt="Profile" width="50" style="border-radius: 50%;">
+                
+                <strong><%= user.username %></strong> 
+                <span class="date">Joined: <%= user.created_at %></span>
+              </li>
+            <% } %>
+          <% } %>
+        </ul>
+    </article>
 
-
-    <ul>
-      <% mascots.forEach(function(mascot) { %>
-        <li>
-          <strong><%= mascot.name %></strong>
-          representing <%= mascot.organization %>,
-          born <%= mascot.birth_year %>
-        </li>
-      <% }); %>
-    </ul>
-  </div>
+</div>
 </main>
 
 <footer>
