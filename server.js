@@ -43,7 +43,7 @@ db.run(`
     email TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL CHECK(length(password) >= 6),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    pfp BLOB DEFAULT '/public/placeholder.png'
+    pfp BLOB DEFAULT '/placeholder.png' 
   )
 `);
 
@@ -102,7 +102,8 @@ app.post('/login', (req, res) => {
         try {
             const isMatch = await bcrypt.compare(password, user.password);
             if (isMatch) {
-                res.send("Success! You are logged in.");
+                req.session.userid = user.id;
+                res.redirect('/');
             } else {
                 res.send("Invalid password");
             }
