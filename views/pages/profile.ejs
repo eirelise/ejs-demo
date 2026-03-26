@@ -11,8 +11,44 @@
 
 <main>
     <div class="box">
-      <h1>Welcome to Your Profile</h1>
-      <p>This is your personal page!</p>
+      <h1>Welcome to Your Profile, <%= user.displayName || user.username %>!</h1>
+       <img src="<%= user.pfp || '/placeholder.png' %>" alt="Profile picture" width="120" height="120" style="border-radius: 50%;">
+        <p><strong>Username:</strong> <%= user.username %></p>
+        <p><strong>Email:</strong> <%= user.email %></p>
+        <p><strong>Description:</strong> <%= user.description || 'No description provided.' %></p>
+
+        <form action="/profile/update" method="POST">
+
+            <div>
+            <label for="displayName"><strong>Display Name</strong></label>
+            <input id="displayName" type="text" name="displayName" value="<%= user.displayName || '' %>" placeholder="Optional">
+          </div>
+
+          <div>
+            <label for="username"><strong>Username</strong></label>
+            <input id="username" type="text" name="username" value="<%= user.username %>" required>
+          </div>
+          <div>
+            <label for="description"><strong>Description</strong></label>
+            <input id="description" type="text" name="description" value="<%= user.description || '' %>" placeholder="Optional">
+          </div>
+
+          <div>
+            <label for="pfp"><strong>Profile picture URL</strong></label>
+            <input id="pfp" type="text" name="pfp" value="<%= user.pfp || '/placeholder.png' %>" required>
+          </div>
+
+          <button type="submit" style="background: #3498db; color: #fff; border: none; padding: 10px 14px; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">Save Profile</button>
+        </form>
+
+        <form action="/profile/delete" method="POST" onsubmit="return confirm('Are you sure you want to delete your account? This cannot be undone.');">
+          <button type="submit" style="background: #e74c3c; color: #fff; border: none; padding: 10px 14px; border-radius: 5px; cursor: pointer;">Delete Account</button>
+        </form>
+
+        <p class="muted">Joined: <%= user.created_at %></p>
+       
+        
+
     </div>
 
 </main>

@@ -42,10 +42,19 @@ db.run(`
     username TEXT NOT NULL UNIQUE CHECK(length(username) >= 3),
     email TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL CHECK(length(password) >= 6),
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    pfp BLOB DEFAULT '/placeholder.png' 
+    created_at DATETIME DEFAULT CURRENT_DATE,
+    pfp BLOB DEFAULT '/placeholder.png',
+    displayName TEXT,
+    description TEXT
   )
 `);
+
+// Add displayName column if it doesn't exist (for existing databases)
+db.run(`ALTER TABLE users ADD COLUMN description TEXT`, (err) => {
+  if (err && !err.message.includes('duplicate column name')) {
+    console.error('Error adding description column:', err.message);
+  }
+});
 
 module.exports = db;
 
@@ -53,18 +62,20 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 // Handle form submit
 app.post("/register", async (req, res) => {
-  const { username, email, password } = req.body;
+  const { username, email, password, pfp } = req.body;
 
   if (!username || !email || !password) {
     return res.send("All fields required");
   }
 
+  const pfpValue = pfp && pfp.trim() ? pfp.trim() : '/placeholder.png';
+
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     db.run(
-      `INSERT INTO users (username, email, password) VALUES (?, ?, ?)`,
-      [username, email, hashedPassword],
+      `INSERT INTO users (username, email, password, pfp) VALUES (?, ?, ?, ?)`,
+      [username, email, hashedPassword, pfpValue],
       function (err) {
         if (err) {
           if (err.message.includes("UNIQUE")) {
@@ -113,64 +124,83 @@ app.post('/login', (req, res) => {
     });
 });
 
-// app.post('/login', (req, res) => {
-//     const { identifier, password } = req.body;
-//     const sql = `SELECT * FROM users WHERE username = ? OR email = ?`;
-
-//     db.get(sql, [identifier, identifier], async (err, user) => {
-//         if (err) return res.status(500).send("Databasefeil");
-//         if (!user) return res.send("Ugyldig brukernavn eller e-post");
-
-//         try {
-//             const isMatch = await bcrypt.compare(password, user.password);
-//             if (isMatch) {
-//                 // --- HER SKJER INNLOGGINGEN ---
-//                 req.session.userid = user.id; // Lagre ID i session
-//                 res.redirect('/'); // Send dem til forsiden!
-//             } else {
-//                 res.send("Feil passord");
-//             }
-//         } catch (error) {
-//             res.status(500).send("Feil ved sammenligning av passord");
-//         }
-//     });
-// });
 app.use(express.static(path.join(__dirname, 'public')));
 // index page
 
 
 
 app.get('/', sjekkInnlogging, function(req, res) {
-    // 1. Call the database directly
-    // The third argument is the "callback" function (err, rows)
-    db.all('SELECT id, username, pfp, created_at FROM users ORDER BY created_at DESC', [], (err, rows) => {
-        
-        // 2. Check for errors first
+    // First, get the current user's data
+    db.get('SELECT id, username, email, pfp, created_at, displayName FROM users WHERE id = ?', [req.session.userid], (err, currentUser) => {
         if (err) {
             console.error(err.message);
             return res.status(500).send("Database error");
         }
 
-        const tagline = "No programming concept is complete without a cute animal mascot.";
+        if (!currentUser) {
+            req.session.destroy();
+            return res.redirect('/login');
+        }
 
-        // 4. Render the page INSIDE the callback
-        // We use 'rows' (the result from the DB) as our 'fafo' data
-        res.render('pages/index', {
-          user: req.userid,
-          fafo: rows,
-          title: 'User List',
-          tagline: tagline
+        // Now get all users for the list
+        db.all('SELECT id, username, pfp, created_at FROM users ORDER BY created_at DESC', [], (err, rows) => {
+            if (err) {
+                console.error(err.message);
+                return res.status(500).send("Database error");
+            }
+
+            const tagline = "No programming concept is complete without a cute animal mascot.";
+
+            res.render('pages/index', {
+                user: currentUser,  // Pass full current user object (for header)
+                fafo: rows,         // All users list
+                title: 'User List',
+                tagline: tagline
+            });
         });
     });
- });
-
-// about page
-app.get('/about', function(req, res) {
-  res.render('pages/about', {
-    tagline: String(req.query.tagline || '')
-  });
 });
 
+// about page
+app.get('/about', sjekkInnlogging, function(req, res) {
+  // Get the current user's full data
+  db.get('SELECT id, username, email, pfp, created_at, displayName FROM users WHERE id = ?', [req.session.userid], (err, user) => {
+    if (err) {
+      console.error(err.message);
+      return res.status(500).send("Database error");
+    }
+
+    if (!user) {
+      req.session.destroy();
+      return res.redirect('/login');
+    }
+
+    res.render('pages/about', {
+      user: user,
+      tagline: String(req.query.tagline || '')
+    });
+  });
+});
+app.get('/profile', sjekkInnlogging, function(req, res) {
+    // Get the current user's full data
+    db.get('SELECT id, username, email, pfp, created_at, displayName, description FROM users WHERE id = ?', [req.session.userid], (err, user) => {
+        if (err) {
+            console.error(err.message);
+            return res.status(500).send("Database error");
+        }
+
+        if (!user) {
+            // User not found, clear session and redirect to login
+            req.session.destroy();
+            return res.redirect('/login');
+        }
+
+        res.render('pages/profile', {
+            tagline: String(req.query.tagline || ''),
+            user: user // Pass the full user object
+        });
+    });
+});
 app.get('/login', function(req, res) {
   res.render('pages/login', {
     tagline: String(req.query.tagline || '')
@@ -182,6 +212,57 @@ app.get('/register', function(req, res) {
     tagline: String(req.query.tagline || '')
   });
 });
+app.post('/profile/update', sjekkInnlogging, (req, res) => {
+    const userId = req.session.userid;
+    const { username, displayName, description, pfp } = req.body;
+
+    if (!username || !pfp || !userId) {
+        return res.status(400).send('Username and profile image required');
+    }
+
+    const cleanUsername = username.trim();
+    const cleanDisplay = displayName ? displayName.trim() : null;
+    const cleanDescription = description ? description.trim() : null;
+    const cleanPfp = pfp.trim() || '/placeholder.png';
+
+    db.run(
+        'UPDATE users SET username = ?, displayName = ?, description = ?, pfp = ? WHERE id = ?',
+        [cleanUsername, cleanDisplay, cleanDescription, cleanPfp, userId],
+        function(err) {
+            if (err) {
+                if (err.message.includes('UNIQUE')) {
+                    return res.send('Username already taken');
+                }
+                console.error(err.message);
+                return res.status(500).send('Database error; could not update profile');
+            }
+            res.redirect('/profile');
+        }
+    );
+});
+
+app.post('/profile/delete', sjekkInnlogging, (req, res) => {
+    const userId = req.session.userid;
+
+    if (!userId) {
+        return res.redirect('/login');
+    }
+
+    db.run('DELETE FROM users WHERE id = ?', [userId], function(err) {
+        if (err) {
+            console.error(err.message);
+            return res.status(500).send('Database error, could not delete account');
+        }
+
+        req.session.destroy(err => {
+            if (err) {
+                console.error(err);
+            }
+            res.redirect('/login');
+        });
+    });
+});
+
 app.get('/logout', (req, res) => {
     req.session.destroy(); // Sletter session-dataen
     res.redirect('/login');

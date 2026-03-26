@@ -16,19 +16,19 @@
       <h2>Variable</h2>
       <p><%= tagline %></p>
       </div>
-    <article class="topUsers">
+    <article class="sideBar">
       <h2>reg users</h2>
   
-        <ul>
+        <ul class="userList">
           <% if (fafo.length === 0) { %>
             <li>No users found yet!</li>
           <% } else { %>
             <% for (let user of fafo) { %>
-              <li class="user-card">
-                <img src="<%= user.pfp %>" alt="Profile" width="50" style="border-radius: 50%;">
+              <li class="userItem">
+                <img src="<%= user.pfp || '/placeholder.png' %>" alt="Profile picture" width="32" style="border-radius: 50%;">
                 
                 <strong><%= user.username %></strong> 
-                <span class="date">Joined: <%= user.created_at %></span>
+                <span class="muted">Joined: <%= user.created_at %></span>
               </li>
             <% } %>
           <% } %>

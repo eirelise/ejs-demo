@@ -1,10 +1,11 @@
 <nav class="navbar">
   <a class="brand" href="/">Fafo</a>
-  <ul>
+  <ul class="nav-ul">
       <a class="nav-link" href="/">Home</a>
       <a class="nav-link" href="/about">About</a>
       <a class="nav-link" href="/logout">Logout</a>
       <a class="nav-link" href="/profile">Profile</a>
-  </ul>
-      
-</nav>
+        <a class="nav-link"><%= user.displayName || user.username %></a>
+        <img src="<%= user.pfp || '/placeholder.png' %>" alt="Profile picture" width="40" height="40">
+</ul>
+      </nav>
