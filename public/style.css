@@ -1,9 +1,17 @@
 :root{
     --primary-color: #2c3e50;
-    --secondary-color: #ecf0f1;
+    --secondary-color: #224a64;
     --accent-color: #3498db;
-    --text-color: #333;
+    --text-color: #d0d0d0;
     --text-color-opp: #fff;
+    --muted: #787878;
+}
+.dark-mode{
+    --primary-color: #ecf0f1;
+    --secondary-color: #2c3e50;
+    --accent-color: #3498db;
+    --text-color: #fff;
+    --text-color-opp: #333;
     --muted: #787878;
 }
 .muted{
@@ -21,6 +29,7 @@ header{
 }
 .nav-ul{
     display: flex;
+    margin-right: 20px;
     flex-direction: row;
     gap: 20px;
     align-items: center;
@@ -127,8 +136,75 @@ a{
     text-decoration: none;
 }
 
-footer{
-    display: absolute;
-    margin-bottom: 0px;
-    padding: 10px 0px;
+.chat-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.chat-form textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--accent-color);
+    border-radius: 4px;
+    background-color: var(--primary-color);
+    color: var(--text-color);
+    resize: vertical;
+}
+
+.chat-form button {
+    align-self: flex-start;
+    padding: 10px 20px;
+    background-color: var(--accent-color);
+    color: var(--text-color-opp);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.chat-form button:hover {
+    background-color: var(--secondary-color);
+}
+
+.chat-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.chat-message {
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+    border-bottom: 1px solid var(--muted);
+    align-items: flex-start;
+}
+
+.chat-message img {
+    flex-shrink: 0;
+}
+
+.chat-content {
+    flex: 1;
+}
+
+.chat-content p {
+    margin: 0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    hyphens: auto;
+}
+
+.chat-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.chat-meta strong {
+    color: var(--accent-color);
 }

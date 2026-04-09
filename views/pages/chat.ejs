@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include('../partials/head'); %>
+</head>
+<body class="container">
+
+<header>
+  <%- include('../partials/header'); %>
+</header>
+
+<main>
+
+
+  <div class="chatbox">
+    <h2>Chat messages</h2>
+    <% if (chats.length === 0) { %>
+      <p>No messages yet. Start the conversation!</p>
+    <% } else { %>
+      <ul class="chat-list" id="chat-list">
+        <% for (const chat of chats) { %>
+          <li class="chat-message">
+            <img src="<%= chat.pfp || '/placeholder.png' %>" alt="User avatar" width="32" height="32" style="border-radius: 50%; object-fit: cover;">
+            <div class="chat-content">
+              <div class="chat-meta">
+                <strong><%= chat.displayName || 'Anonymous' %></strong>
+                <span class="muted"><%= new Date(chat.sent_at).toLocaleString() %></span>
+              </div>
+              <p><%= chat.message %></p>
+            </div>
+          </li>
+        <% } %>
+      </ul>
+    <% } %>
+    <form method="POST" action="/chat" class="chat-form">
+      <textarea name="message" rows="4" placeholder="Write your message here..." required></textarea>
+      <button type="submit">Send message</button>
+    </form>
+  </div>
+</main>
+
+<footer>
+  <%- include('../partials/footer'); %>
+</footer>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  // Handle Enter key to submit chat message
+  document.addEventListener('DOMContentLoaded', function() {
+    const messageTextarea = document.querySelector('textarea[name="message"]');
+    const chatForm = document.querySelector('.chat-form');
+
+    messageTextarea.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        chatForm.submit();
+      }
+    });
+
+    // Scroll to bottom when page loads (for user's own messages)
+    const chatList = document.getElementById('chat-list');
+    if (chatList && chatList.children.length > 0) {
+      chatList.scrollTop = chatList.scrollHeight;
+    }
+  });
+
+  const socket = io();
+
+  socket.on('new message', function(data) {
+    const chatList = document.getElementById('chat-list');
+    const li = document.createElement('li');
+    li.className = 'chat-message';
+
+    li.innerHTML = `
+      <img src="${data.pfp || '/placeholder.png'}" alt="User avatar" width="48" height="48" style="border-radius: 50%; object-fit: cover;">
+      <div class="chat-content">
+        <div class="chat-meta">
+          <strong>${data.displayName || 'Anonymous'}</strong>
+          <span class="muted">${new Date(data.sent_at).toLocaleString()}</span>
+        </div>
+        <p>${data.message}</p>
+      </div>
+    `;
+
+    chatList.appendChild(li);
+    // Scroll to bottom
+    chatList.scrollTop = chatList.scrollHeight;
+  });
+</script>
+
+</body>
+</html>

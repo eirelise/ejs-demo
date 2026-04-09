@@ -1,5 +1,9 @@
 const express = require('express');
 const app = express();
+const http = require('http');
+const server = http.createServer(app);
+const { Server } = require("socket.io");
+const io = new Server(server);
 
 // set the view engine to ejs
 app.set('view engine', 'ejs');
@@ -17,12 +21,13 @@ const bcrypt = require('bcrypt');
 const session = require('express-session');
 
 app.use(session({
-    secret: 'min_hemmelige_kode', // Bytt denne til noe unikt
+    secret: 'min_hemmelige_kode',
     resave: false,
     saveUninitialized: false,
     cookie: { secure: false } // Sett til true hvis du bruker HTTPS
 }));
 
+const themes = ['light', 'dark'];
 
 // Middleware: krever innlogging
 function sjekkInnlogging(req, res, next) {
@@ -39,17 +44,35 @@ function sjekkInnlogging(req, res, next) {
 db.run(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL UNIQUE CHECK(length(username) >= 3),
+    username TEXT NOT NULL UNIQUE CHECK(length(username) >= 3 AND length(username) <= 20),
     email TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL CHECK(length(password) >= 6),
-    created_at DATETIME DEFAULT CURRENT_DATE,
-    pfp BLOB DEFAULT '/placeholder.png',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    pfp TEXT DEFAULT '/placeholder.png',
     displayName TEXT,
     description TEXT
   )
 `);
 
-// Add displayName column if it doesn't exist (for existing databases)
+db.run(`
+  CREATE TABLE IF NOT EXISTS chats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    displayName TEXT,
+    pfp TEXT,
+    message TEXT NOT NULL,
+    sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+`);
+
+// Add displayName and description columns if they don't exist (for existing databases)
+db.run(`ALTER TABLE users ADD COLUMN displayName TEXT`, (err) => {
+  if (err && !err.message.includes('duplicate column name')) {
+    console.error('Error adding displayName column:', err.message);
+  }
+});
+
 db.run(`ALTER TABLE users ADD COLUMN description TEXT`, (err) => {
   if (err && !err.message.includes('duplicate column name')) {
     console.error('Error adding description column:', err.message);
@@ -201,6 +224,80 @@ app.get('/profile', sjekkInnlogging, function(req, res) {
         });
     });
 });
+
+app.get('/chat', sjekkInnlogging, function(req, res) {
+    db.get('SELECT id, username, email, pfp, created_at, displayName FROM users WHERE id = ?', [req.session.userid], (err, currentUser) => {
+        if (err) {
+            console.error(err.message);
+            return res.status(500).send("Database error");
+        }
+
+        if (!currentUser) {
+            req.session.destroy();
+            return res.redirect('/login');
+        }
+
+        db.all('SELECT id, displayName, pfp, message, sent_at FROM chats ORDER BY sent_at ASC', [], (err, chats) => {
+            if (err) {
+                console.error(err.message);
+                return res.status(500).send("Database error");
+            }
+
+            res.render('pages/chat', {
+                user: currentUser,
+                chats: chats,
+                title: 'Public Chat'
+            });
+        });
+    });
+});
+
+app.post('/chat', sjekkInnlogging, function(req, res) {
+    const userId = req.session.userid;
+    const message = req.body.message ? req.body.message.trim() : '';
+
+    if (!message) {
+        return res.redirect('/chat');
+    }
+
+    db.get('SELECT username, displayName, pfp FROM users WHERE id = ?', [userId], (err, user) => {
+        if (err) {
+            console.error(err.message);
+            return res.status(500).send('Database error');
+        }
+
+        if (!user) {
+            req.session.destroy();
+            return res.redirect('/login');
+        }
+
+        const displayName = user.displayName || user.username;
+        const pfp = user.pfp || '/placeholder.png';
+
+        db.run(
+            'INSERT INTO chats (user_id, displayName, pfp, message) VALUES (?, ?, ?, ?)',
+            [userId, displayName, pfp, message],
+            function(err) {
+                if (err) {
+                    console.error(err.message);
+                    return res.status(500).send('Database error');
+                }
+
+                // Emit the new message to all connected clients
+                io.emit('new message', {
+                    id: this.lastID,
+                    displayName: displayName,
+                    pfp: pfp,
+                    message: message,
+                    sent_at: new Date().toISOString()
+                });
+
+                res.redirect('/chat');
+            }
+        );
+    });
+});
+
 app.get('/login', function(req, res) {
   res.render('pages/login', {
     tagline: String(req.query.tagline || '')
@@ -267,4 +364,14 @@ app.get('/logout', (req, res) => {
     req.session.destroy(); // Sletter session-dataen
     res.redirect('/login');
 });
-app.listen(8080, () => console.log('Server is listening on port 8080'));
+
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+    console.log('A user connected');
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected');
+    });
+});
+
+server.listen(8080, () => console.log('Server is listening on port 8080'));
